@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>UHS Seismicity Resolution Interface</title>
+    <style>
+        body {
+            background-color: #111111;
+            color: #ffffff;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #input-panel {
+            background-color: #222222;
+            width: 100%;
+            max-width: 880px;
+            padding: 15px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        label {
+            font-size: 14px;
+        }
+        input {
+            background-color: #1a1a1a;
+            color: #00ffcc;
+            border: 1px solid #444444;
+            padding: 5px;
+            font-family: 'Courier New', Courier, monospace;
+            width: 80px;
+        }
+        button {
+            background-color: #444444;
+            color: #ffffff;
+            border: none;
+            padding: 6px 15px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        button:hover {
+            background-color: #555555;
+        }
+        #viewports {
+            display: flex;
+            gap: 30px;
+            width: 100%;
+            max-width: 900px;
+            justify-content: center;
+        }
+        canvas {
+            background-color: #1a1a1a;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="input-panel">
+        <label for="depth-input">Depth (km):</label>
+        <input type="number" id="depth-input" value="250.0" step="0.1" min="0" max="6370.9">
+        <button id="execute-btn">Execute</button>
+    </div>
+
+    <div id="viewports">
+        <canvas id="canvas-left" width="420" height="450"></canvas>
+        <canvas id="canvas-right" width="420" height="450"></canvas>
+    </div>
+
+    <script>
+        const LAMBDA = 6960.0;
+        const RE = 6371.0;
+        const REL_TOLERANCE = 0.005;
+
+        const OBSERVED_NODES = {
+            1.10000000: "Lithospheric Base (11/10)",
+            1.12500000: "Upper Mantle Intermediate (9/8)",
+            1.14285714: "Calabrian Slab Rupture (8/7)",
+            1.22222222: "Mantle Transition (11/9)"
+        };
+
+        function resolve(depthKm) {
+            const r = RE - depthKm;
+            const n = LAMBDA / r;
+
+            let matchedNode = "Open Interval";
+            let lockStatus = "N";
+            let bestDev = Infinity;
+            let bestNodeVal = null;
+
+            for (let nodeValStr in OBSERVED_NODES) {
+                const nodeVal = parseFloat(nodeValStr);
+                const relDev = Math.abs(n - nodeVal) / nodeVal;
+                if (relDev < bestDev) {
+                    bestDev = relDev;
+                    bestNodeVal = nodeVal;
+                }
+            }
+
+            if (bestNodeVal !== null && bestDev <= REL_TOLERANCE) {
+                matchedNode = OBSERVED_NODES[bestNodeVal];
+                lockStatus = "Y";
+            }
+
+            return { r, n, matchedNode, lockStatus, bestDev, bestNodeVal };
+        }
+
+        function updatePlots() {
+            const depthInput = document.getElementById('depth-input').value;
+            const depth = parseFloat(depthInput);
+
+            if (isNaN(depth) || depth < 0 || depth >= RE) {
+                alert("Error: Depth must be a numeric value between 0 and 6371 km.");
+                return;
+            }
+
+            const res = resolve(depth);
+
+            // Log output matching historical ledger format
+            console.log(`\n=== UHS Verification ===`);
+            console.log(`Depth: ${depth} km`);
+            console.log(`r = ${res.r.toFixed(2)} km`);
+            console.log(`n = ${res.n.toFixed(6)}`);
+            const closestNodeName = OBSERVED_NODES[res.bestNodeVal] || 'none';
+            console.log(`Closest node: ${closestNodeName} at ${(res.bestDev * 100).toFixed(4)}%`);
+            console.log(`Lock: ${res.lockStatus} (threshold: ${(REL_TOLERANCE * 100)}%)`);
+            console.log(`=======================`);
+
+            // Left Canvas Drawing
+            const ctxLeft = document.getElementById('canvas-left').getContext('2d');
+            ctxLeft.clearRect(0, 0, 420, 450);
+
+            ctxLeft.fillStyle = "#ffffff";
+            ctxLeft.font = "bold 14px Courier New";
+            ctxLeft.textAlign = "center";
+            ctxLeft.fillText("Regional Catalog Profile", 210, 40);
+
+            ctxLeft.fillStyle = "#aaaaaa";
+            ctxLeft.font = "11px Courier New";
+            ctxLeft.fillText(`Input Depth: ${depth.toFixed(2)} km`, 210, 80);
+
+            ctxLeft.fillStyle = "#ffffff";
+            ctxLeft.font = "bold 10px Courier New";
+            ctxLeft.fillText("Statistical Framework:", 210, 120);
+
+            ctxLeft.fillStyle = "#888888";
+            ctxLeft.font = "9px Courier New";
+            ctxLeft.fillText("Requires independent regional calibration", 210, 145);
+            ctxLeft.fillText("Dependent on historical catalog limits", 210, 170);
+
+            ctxLeft.strokeStyle = "#ffaa00";
+            ctxLeft.lineWidth = 2;
+            ctxLeft.strokeRect(60, 220, 300, 40);
+
+            ctxLeft.fillStyle = "#ffaa00";
+            ctxLeft.font = "bold 10px Courier New";
+            ctxLeft.fillText("Non-Universal Baseline", 210, 244);
+
+            // Right Canvas Drawing
+            const ctxRight = document.getElementById('canvas-right').getContext('2d');
+            ctxRight.clearRect(0, 0, 420, 450);
+
+            ctxRight.fillStyle = "#ffffff";
+            ctxRight.font = "bold 14px Courier New";
+            ctxRight.textAlign = "center";
+            ctxRight.fillText("UHS Radial Vector Mapping", 210, 40);
+
+            const cx = 210;
+            const cy = 260;
+            const scaleFactor = 140.0 / LAMBDA;
+
+            // n=1: Field Envelope
+            const rEnvelope = LAMBDA / 1.0;
+            const pixelEnvelope = rEnvelope * scaleFactor;
+            ctxRight.strokeStyle = "#333333";
+            ctxRight.lineWidth = 1.5;
+            ctxRight.setLineDash([6, 4]);
+            ctxRight.beginPath();
+            ctxRight.arc(cx, cy, pixelEnvelope, 0, 2 * Math.PI);
+            ctxRight.stroke();
+            ctxRight.setLineDash([]);
+            
+            ctxRight.fillStyle = "#444444";
+            ctxRight.font = "8px Courier New";
+            ctxRight.fillText("Field Envelope (n=1)", cx, cy - pixelEnvelope - 8);
+
+            // Earth Surface
+            const pixelSurface = RE * scaleFactor;
+            ctxRight.strokeStyle = "#444444";
+            ctxRight.lineWidth = 1;
+            ctxRight.beginPath();
+            ctxRight.arc(cx, cy, pixelSurface, 0, 2 * Math.PI);
+            ctxRight.stroke();
+
+            // n=2: Core-Mantle Boundary
+            const rCmb = LAMBDA / 2.0;
+            const pixelCmb = rCmb * scaleFactor;
+            ctxRight.strokeStyle = "#555555";
+            ctxRight.lineWidth = 1.5;
+            ctxRight.beginPath();
+            ctxRight.arc(cx, cy, pixelCmb, 0, 2 * Math.PI);
+            ctxRight.stroke();
+            
+            ctxRight.fillStyle = "#555555";
+            ctxRight.font = "8px Courier New";
+            ctxRight.fillText("r_CMB (n=2)", cx, cy - pixelCmb - 5);
+
+            // Rational ticks
+            for (let nodeValStr in OBSERVED_NODES) {
+                const nodeVal = parseFloat(nodeValStr);
+                const nodeLabel = nodeValStr === "1.14285714" ? "8/7" : (nodeValStr === "1.22222222" ? "11/9" : (nodeValStr === "1.125" ? "9/8" : "11/10"));
+                const nodeR = LAMBDA / nodeVal;
+                if (nodeR > 0 && nodeR <= RE) {
+                    const pixelNode = nodeR * scaleFactor;
+                    ctxRight.fillStyle = "#ffaa00";
+                    ctxRight.beginPath();
+                    ctxRight.arc(cx, cy - pixelNode, 2, 0, 2 * Math.PI);
+                    ctxRight.fill();
+
+                    ctxRight.fillStyle = "#ffaa00";
+                    ctxRight.font = "7px Courier New";
+                    ctxRight.textAlign = "left";
+                    ctxRight.fillText(nodeLabel, cx + 25, cy - pixelNode + 2);
+                }
+            }
+            ctxRight.textAlign = "center";
+
+            // Active vector tracking line
+            const pixelR = res.r * scaleFactor;
+            ctxRight.strokeStyle = "#222222";
+            ctxRight.lineWidth = 1;
+            ctxRight.beginPath();
+            ctxRight.moveTo(cx, cy);
+            ctxRight.lineTo(cx, cy - pixelEnvelope);
+            ctxRight.stroke();
+
+            // Drawing the tracking vector arrow manually
+            ctxRight.strokeStyle = "#00ffcc";
+            ctxRight.lineWidth = 2.5;
+            ctxRight.beginPath();
+            ctxRight.moveTo(cx, cy);
+            ctxRight.lineTo(cx, cy - pixelR);
+            ctxRight.stroke();
+
+            // Arrow head
+            ctxRight.fillStyle = "#00ffcc";
+            ctxRight.beginPath();
+            ctxRight.moveTo(cx, cy - pixelR);
+            ctxRight.lineTo(cx - 4, cy - pixelR + 8);
+            ctxRight.lineTo(cx + 4, cy - pixelR + 8);
+            ctxRight.fill();
+
+            // White point indicator
+            ctxRight.fillStyle = "#ffffff";
+            ctxRight.strokeStyle = "#00ffcc";
+            ctxRight.lineWidth = 1;
+            ctxRight.beginPath();
+            ctxRight.arc(cx, cy - pixelR, 3, 0, 2 * Math.PI);
+            ctxRight.fill();
+            ctxRight.stroke();
+
+            ctxRight.fillStyle = "#555555";
+            ctxRight.font = "8px Courier New";
+            ctxRight.fillText("r=0", cx, cy + 15);
+
+            // Text outputs
+            ctxRight.fillStyle = "#00ffcc";
+            ctxRight.font = "bold 12px Courier New";
+            ctxRight.fillText(`n = ${res.n.toFixed(6)}`, 210, 390);
+
+            ctxRight.fillStyle = "#ffffff";
+            ctxRight.font = "10px Courier New";
+            ctxRight.fillText(`Node Address: ${res.matchedNode}`, 210, 415);
+
+            let statusText = "";
+            if (res.lockStatus === "Y") {
+                ctxRight.fillStyle = "#00ffcc";
+                statusText = `Phase Lock: Verified (dev: ${(res.bestDev * 100).toFixed(3)}%)`;
+            } else {
+                ctxRight.fillStyle = "#ffaa00";
+                statusText = `Phase Lock: Clear (+ ${(res.bestDev * 100).toFixed(3)}% deviation)`;
+            }
+            ctxRight.font = "bold 10px Courier New";
+            ctxRight.fillText(statusText, 210, 440);
+        }
+
+        document.getElementById('execute-btn').addEventListener('click', updatePlots);
+        window.onload = updatePlots;
+    </script>
+</body>
+</html>
