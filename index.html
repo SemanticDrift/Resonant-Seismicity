@@ -212,7 +212,7 @@
             ctxRight.setLineDash([]);
             
             ctxRight.fillStyle = "#444444";
-            ctxRight.font = "bold 14px Courier New";
+            ctxRight.font = "12px Courier New";
             ctxRight.fillText("Boundary Envelope (n=1)", cx, cy - pixelEnvelope - 8);
 
             // Earth Surface
@@ -249,7 +249,7 @@
                     ctxRight.fill();
 
                     ctxRight.fillStyle = "#ffaa00";
-                    ctxRight.font = "12px Courier New";
+                    ctxRight.font = "10px Courier New";
                     ctxRight.textAlign = "left";
                     ctxRight.fillText(nodeLabel, cx + 25, cy - pixelNode + 2);
                 }
@@ -288,12 +288,12 @@
             ctxRight.stroke();
 
             ctxRight.fillStyle = "#555555";
-            ctxRight.font = "10px Courier New";
+            ctxRight.font = "8px Courier New";
             ctxRight.fillText("r=0", cx, cy + 15);
 
             // Visual Data Readouts
             ctxRight.fillStyle = "#00ffcc";
-            ctxRight.font = "bold 12px Courier New";
+            ctxRight.font = "bold 10px Courier New";
             ctxRight.fillText(`n = ${res.n.toFixed(6)}`, 210, 360);
 
             ctxRight.fillStyle = "#ffffff";
