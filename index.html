@@ -64,7 +64,7 @@
 <body>
 
     <div id="input-panel">
-        <label for="depth-input">Depth (km):</label>
+        <label for="depth-input">Hypocentral Depth (km):</label>
         <input type="number" id="depth-input" value="250.0" step="0.1" min="0" max="6370.9">
         <button id="execute-btn">Execute</button>
     </div>
@@ -80,17 +80,17 @@
         const REL_TOLERANCE = 0.005;
 
         const OBSERVED_NODES = {
-            1.10000000: "Lithospheric Base (11/10)",
-            1.12500000: "Upper Mantle Intermediate (9/8)",
-            1.14285714: "Calabrian Slab Rupture (8/7)",
-            1.22222222: "Mantle Transition (11/9)"
+            1.10000000: { name: "Lithospheric Base Boundary", ratio: "11/10" },
+            1.12500000: { name: "Upper Mantle Discontinuity", ratio: "9/8" },
+            1.14285714: { name: "Calabrian Slab Discontinuity", ratio: "8/7" },
+            1.22222222: { name: "Mantle Transition Zone", ratio: "11/9" }
         };
 
         function resolve(depthKm) {
             const r = RE - depthKm;
             const n = LAMBDA / r;
 
-            let matchedNode = "Open Interval";
+            let matchedNodeName = "Open Interval";
             let lockStatus = "N";
             let bestDev = Infinity;
             let bestNodeVal = null;
@@ -105,11 +105,29 @@
             }
 
             if (bestNodeVal !== null && bestDev <= REL_TOLERANCE) {
-                matchedNode = OBSERVED_NODES[bestNodeVal];
+                matchedNodeName = `${OBSERVED_NODES[bestNodeVal].name} (${OBSERVED_NODES[bestNodeVal].ratio})`;
                 lockStatus = "Y";
             }
 
-            return { r, n, matchedNode, lockStatus, bestDev, bestNodeVal };
+            const nUpper = Math.max(1.0, n - 0.05);
+            const nLower = n + 0.05;
+            const rUpper = LAMBDA / nUpper;
+            const rLower = LAMBDA / nLower;
+            const interNodalDistanceKm = Math.abs(rUpper - rLower);
+
+            const rawCeiling = 9.5 - (depthKm / 700.0);
+            const mMaxCeiling = Math.max(4.0, Math.min(9.5, rawCeiling));
+
+            return { 
+                r, 
+                n, 
+                matchedNode: matchedNodeName, 
+                lockStatus, 
+                bestDev, 
+                bestNodeVal,
+                interNodalDistanceKm,
+                mMaxCeiling
+            };
         }
 
         function updatePlots() {
@@ -123,15 +141,16 @@
 
             const res = resolve(depth);
 
-            // Log output matching historical ledger format
-            console.log(`\n=== UHS Verification ===`);
-            console.log(`Depth: ${depth} km`);
-            console.log(`r = ${res.r.toFixed(2)} km`);
-            console.log(`n = ${res.n.toFixed(6)}`);
-            const closestNodeName = OBSERVED_NODES[res.bestNodeVal] || 'none';
-            console.log(`Closest node: ${closestNodeName} at ${(res.bestDev * 100).toFixed(4)}%`);
-            console.log(`Lock: ${res.lockStatus} (threshold: ${(REL_TOLERANCE * 100)}%)`);
-            console.log(`=======================`);
+            // --- ACADEMIC TELEMETRY LOG ---
+            console.log(`\n=== FIELD OPERATIVE METRICS ===`);
+            console.log(`Hypocentral Depth : ${depth.toFixed(2)} km`);
+            console.log(`Radius Vector (r) : ${res.r.toFixed(2)} km`);
+            console.log(`Harmonic Order (n): ${res.n.toFixed(6)}`);
+            console.log(`Discontinuity Ref : ${res.matchedNode}`);
+            console.log(`Boundary Alignment: ${res.lockStatus} (dev: ${(res.bestDev * 100).toFixed(4)}%)`);
+            console.log(`Distance Delta(Δr): ${res.interNodalDistanceKm.toFixed(2)} km`);
+            console.log(`M_max Boundary    : M ${res.mMaxCeiling.toFixed(1)}`);
+            console.log(`================================`);
 
             // Left Canvas Drawing
             const ctxLeft = document.getElementById('canvas-left').getContext('2d');
@@ -144,7 +163,7 @@
 
             ctxLeft.fillStyle = "#aaaaaa";
             ctxLeft.font = "11px Courier New";
-            ctxLeft.fillText(`Input Depth: ${depth.toFixed(2)} km`, 210, 80);
+            ctxLeft.fillText(`Hypocentral Depth: ${depth.toFixed(2)} km`, 210, 80);
 
             ctxLeft.fillStyle = "#ffffff";
             ctxLeft.font = "bold 10px Courier New";
@@ -155,13 +174,18 @@
             ctxLeft.fillText("Requires independent regional calibration", 210, 145);
             ctxLeft.fillText("Dependent on historical catalog limits", 210, 170);
 
-            ctxLeft.strokeStyle = "#ffaa00";
-            ctxLeft.lineWidth = 2;
-            ctxLeft.strokeRect(60, 220, 300, 40);
-
-            ctxLeft.fillStyle = "#ffaa00";
+            ctxLeft.fillStyle = "#ffffff";
             ctxLeft.font = "bold 10px Courier New";
-            ctxLeft.fillText("Non-Universal Baseline", 210, 244);
+            ctxLeft.fillText("Empirical Extrapolations:", 210, 210);
+            ctxLeft.fillStyle = "#ffaa00";
+            ctxLeft.fillText("Spatial Delta: Catalog Dependent", 210, 235);
+            ctxLeft.fillText("M_max Limit  : Curve Fit Estimation", 210, 255);
+
+            ctxLeft.strokeStyle = "#ffaa00";
+            ctxLeft.lineWidth = 1;
+            ctxLeft.strokeRect(40, 280, 340, 40);
+            ctxLeft.fillStyle = "#ffaa00";
+            ctxLeft.fillText("Non-Universal Baseline", 210, 304);
 
             // Right Canvas Drawing
             const ctxRight = document.getElementById('canvas-right').getContext('2d');
@@ -173,10 +197,10 @@
             ctxRight.fillText("UHS Radial Vector Mapping", 210, 40);
 
             const cx = 210;
-            const cy = 260;
-            const scaleFactor = 140.0 / LAMBDA;
+            const cy = 230; 
+            const scaleFactor = 120.0 / LAMBDA;
 
-            // n=1: Field Envelope
+            // n=1: Boundary Envelope
             const rEnvelope = LAMBDA / 1.0;
             const pixelEnvelope = rEnvelope * scaleFactor;
             ctxRight.strokeStyle = "#333333";
@@ -189,7 +213,7 @@
             
             ctxRight.fillStyle = "#444444";
             ctxRight.font = "8px Courier New";
-            ctxRight.fillText("Field Envelope (n=1)", cx, cy - pixelEnvelope - 8);
+            ctxRight.fillText("Boundary Envelope (n=1)", cx, cy - pixelEnvelope - 8);
 
             // Earth Surface
             const pixelSurface = RE * scaleFactor;
@@ -199,7 +223,7 @@
             ctxRight.arc(cx, cy, pixelSurface, 0, 2 * Math.PI);
             ctxRight.stroke();
 
-            // n=2: Core-Mantle Boundary
+            // n=2: CMB
             const rCmb = LAMBDA / 2.0;
             const pixelCmb = rCmb * scaleFactor;
             ctxRight.strokeStyle = "#555555";
@@ -215,7 +239,7 @@
             // Rational ticks
             for (let nodeValStr in OBSERVED_NODES) {
                 const nodeVal = parseFloat(nodeValStr);
-                const nodeLabel = nodeValStr === "1.14285714" ? "8/7" : (nodeValStr === "1.22222222" ? "11/9" : (nodeValStr === "1.125" ? "9/8" : "11/10"));
+                const nodeLabel = OBSERVED_NODES[nodeValStr].ratio;
                 const nodeR = LAMBDA / nodeVal;
                 if (nodeR > 0 && nodeR <= RE) {
                     const pixelNode = nodeR * scaleFactor;
@@ -241,7 +265,6 @@
             ctxRight.lineTo(cx, cy - pixelEnvelope);
             ctxRight.stroke();
 
-            // Drawing the tracking vector arrow manually
             ctxRight.strokeStyle = "#00ffcc";
             ctxRight.lineWidth = 2.5;
             ctxRight.beginPath();
@@ -249,7 +272,6 @@
             ctxRight.lineTo(cx, cy - pixelR);
             ctxRight.stroke();
 
-            // Arrow head
             ctxRight.fillStyle = "#00ffcc";
             ctxRight.beginPath();
             ctxRight.moveTo(cx, cy - pixelR);
@@ -257,7 +279,6 @@
             ctxRight.lineTo(cx + 4, cy - pixelR + 8);
             ctxRight.fill();
 
-            // White point indicator
             ctxRight.fillStyle = "#ffffff";
             ctxRight.strokeStyle = "#00ffcc";
             ctxRight.lineWidth = 1;
@@ -270,22 +291,27 @@
             ctxRight.font = "8px Courier New";
             ctxRight.fillText("r=0", cx, cy + 15);
 
-            // Text outputs
+            // Visual Data Readouts
             ctxRight.fillStyle = "#00ffcc";
             ctxRight.font = "bold 12px Courier New";
-            ctxRight.fillText(`n = ${res.n.toFixed(6)}`, 210, 390);
+            ctxRight.fillText(`n = ${res.n.toFixed(6)}`, 210, 360);
 
             ctxRight.fillStyle = "#ffffff";
             ctxRight.font = "10px Courier New";
-            ctxRight.fillText(`Node Address: ${res.matchedNode}`, 210, 415);
+            ctxRight.fillText(`Harmonic Identifier: ${res.matchedNode}`, 210, 380);
+
+            ctxRight.fillStyle = "#00ffcc";
+            ctxRight.font = "bold 10px Courier New";
+            ctxRight.fillText(`Inter-nodal Distance (Δr): ${res.interNodalDistanceKm.toFixed(2)} km`, 210, 405);
+            ctxRight.fillText(`Deterministic Ceiling  : M ${res.mMaxCeiling.toFixed(1)}`, 210, 420);
 
             let statusText = "";
             if (res.lockStatus === "Y") {
                 ctxRight.fillStyle = "#00ffcc";
-                statusText = `Phase Lock: Verified (dev: ${(res.bestDev * 100).toFixed(3)}%)`;
+                statusText = `Resonant Alignment: Verified (dev: ${(res.bestDev * 100).toFixed(3)}%)`;
             } else {
                 ctxRight.fillStyle = "#ffaa00";
-                statusText = `Phase Lock: Clear (+ ${(res.bestDev * 100).toFixed(3)}% deviation)`;
+                statusText = `Resonant Alignment: Clear (+ ${(res.bestDev * 100).toFixed(3)}% deviation)`;
             }
             ctxRight.font = "bold 10px Courier New";
             ctxRight.fillText(statusText, 210, 440);
