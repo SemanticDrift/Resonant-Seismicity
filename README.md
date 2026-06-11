@@ -131,4 +131,4 @@ SemanticShift.net. DOI: 10.5281/zenodo.20537965
 
 © 2026 Carolina Johnson (CJ)
 Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).
-Attribution required.
+Attribution required. https://creativecommons.org/licenses/by/4.0/
